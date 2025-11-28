@@ -1,100 +1,56 @@
-use crate::*;
 use logos::Logos;
 
 #[derive(Logos, Debug, Clone, PartialEq)]
 pub enum TokenKind {
-    #[regex(r#"@include\s+"([^"]+)""#, |lex| lex.slice()[8..].trim_start()[1..lex.slice()[8..].trim_start().len() - 1].to_string())]
-    IncludeFile(String),
-
-    #[token("\n")]
-    Newline,
-
-    #[token(" ", logos::skip)]
-    Whitespace,
-
-    #[token("\t", logos::skip)]
-    Tab,
-
-    #[token("\r", logos::skip)]
-    CarriageReturn,
-
-    #[token("(")]
-    LeftParen,
-
-    #[token(")")]
-    RightParen,
-
-    #[token("{")]
-    LeftBrace,
-
-    #[token("}")]
-    RightBrace,
-
-    #[token(",")]
-    Comma,
-
     #[token("~")]
+
     Tilde,
 
     #[token("`")]
     Grave,
 
+
     #[token("#")]
     Pound,
 
     #[token("+")]
-    Plus,
 
+    Plus,
     #[token("++")]
     PlusPlus,
-
     #[token("-")]
     Minus,
-
     #[token("--")]
     MinusMinus,
 
+
     #[token("*")]
     Star,
-
     #[token("/")]
     Slash,
-
     #[token("%")]
     Mod,
 
     #[token("!")]
     Bang,
 
-    #[token("=")]
-    Equal,
-
     #[token(">")]
     Greater,
-
     #[token(">>")]
     GreaterGreater,
 
     #[token("<")]
     Less,
-
     #[token("<<")]
     LessLess,
 
     #[token("&")]
     Amp,
-
     #[token("&&")]
     AmpAmp,
 
     #[token("|")]
     Pipe,
-
-    #[token("[")]
-    LeftBracket,
-
-    #[token("]")]
-    RightBracket,
 
     #[token("||")]
     PipePipe,
@@ -102,54 +58,105 @@ pub enum TokenKind {
     #[token("^")]
     Xor,
 
+    // --- Keywords ---
+    #[token("var")]
+    Var,
+    #[token("const")]
+    Const,
+    #[token("include")]
+    Include,
+
+    // --- Directives starting with '@' ---
+    #[regex(r"@[A-Za-z_][A-Za-z0-9_]*")]
+    AtDirective, // matches @define, @foo, @bar32, etc.
+
+    // --- macro_rules! ---
+    #[token("macro_rules!")]
+    MacroRules,
+
+    // --- for!(...) loop ---
+    #[token("for!")]
+    ForBang,
+
+    // --- Identifiers ---
+    #[regex(r"[A-Za-z_][A-Za-z0-9_]*", |lex| lex.slice().to_string())]
+    Ident(String),
+
+    // --- Literals ---
+    #[regex(r"0x[0-9A-Fa-f]+", |lex| i64::from_str_radix(&lex.slice()[2..], 16).unwrap())]
+    HexLit(i64),
+
+    #[regex(r"0b[01]+", |lex| i64::from_str_radix(&lex.slice()[2..], 2).unwrap())]
+    BinLit(i64),
+
+    #[regex(r"0o[0-7]+", |lex| i64::from_str_radix(&lex.slice()[2..], 8).unwrap())]
+    OctLit(i64),
+
+    #[regex(r"[0-9]+", |lex| lex.slice().parse::<i64>().unwrap())]
+    IntLit(i64),
+
+    // --- Strings ---
+    #[regex(r#""([^"\\]|\\.)*""#, |lex| lex.slice().to_string())]
+    StrLit(String),
+
+    // --- Character literal ---
+    #[regex(r#"'([^'\\]|\\.)'"#, |lex| {
+        let s = lex.slice();
+
+        parse_char(s) // you define this small helper fn
+    })]
+    CharLit(char),
+
+    // --- Symbols & punctuation ---
+    #[token("=")]
+    Equal,
+
+    #[token("(")]
+    LeftParen,
+    #[token(")")]
+    RightParen,
+    #[token("{")]
+    LeftBrace,
+    #[token("}")]
+    RightBrace,
+    #[token(",")]
+    Comma,
     #[token(":")]
     Colon,
 
-    #[regex("[rR][0-9]", |lex| lex.slice()[1..].parse::<u8>().unwrap())]
-    Register(u8),
+    // Labels like `.foo:` require DOT token.
+    #[token(".")]
+    Dot,
+    
+    #[token(";")]
+    Semicolon,
 
-    #[regex(r#""([^\\"]|\\.)*""#, |lex| parse_string(lex.slice()))]
-    StringLit(String),
+    // Prefix for `::global:`
+    #[token("::")]
+    DoubleColon,
 
-    #[regex(r"(?:0[bB][01]+|0[oO][0-7]+|0[xX][0-9a-fA-F]+|-?\d+|'([^\\']|\\.)')", |lex| parse_content(lex.slice()))]
-    IntLit(i64),
-
-    #[regex(r"macro_rules!", |lex| lex.slice().to_string())]
-    MacroDef(String),
-
-    #[regex("const[ ]+[a-zA-Z_][a-zA-Z0-9_]*", |lex| lex.slice()[6..].trim().to_string())]
-    Constant(String),
-
-    #[regex("[a-zA-Z_][a-zA-Z0-9_]*", |lex| lex.slice().to_string())]
-    Ident(String),
-
-    #[regex(r"\.[a-zA-Z_][a-zA-Z0-9_]*", |lex| lex.slice()[1..].to_string())]
-    Directive(String),
-
-    #[regex("%[a-zA-Z_][a-zA-Z0-9_]*", |lex| lex.slice()[1..].to_string())]
-    MacroIdent(String),
-
-    #[regex(r"[a-zA-Z_][a-zA-Z0-9_]*!\(", |lex| lex.slice()[0..lex.slice().len() - 2].to_string())]
-    MacroCall(String),
-
-    #[regex("%[a-zA-Z_][a-zA-Z0-9_]*:", |lex| lex.slice()[1..lex.slice().len() - 1].to_string())]
-    MacroLabel(String),
-
-    #[regex(";.*", logos::skip)]
-    Comment,
-
-    #[regex(r"/\*([^*]|\*[^/])*\*/", logos::skip)]
-    MultiLineComment,
-
-    Label(String),
-
-    IIdent(String),
-
-    #[regex("&[rR][0-9]", |lex| lex.slice()[2..].parse::<u8>().unwrap())]
-    IReg(u8),
-    Imm(i64),
-    Expr(i64),
+    // Ignore whitespace
+    #[regex(r"[ \t\r\n]+", logos::skip)]
+    Whitespace,
 }
+
+fn parse_char(s: &str) -> char {
+    let inner = &s[1..s.len() - 1]; // remove quotes
+    if inner.starts_with("\\") {
+        match &inner[1..] {
+            "n" => '\n',
+            "t" => '\t',
+
+            "r" => '\r',
+            "'" => '\'',
+            "\\" => '\\',
+            _ => panic!("unknown escape {}", inner),
+        }
+    } else {
+        inner.chars().next().unwrap()
+    }
+}
+
 fn parse_content(content: &str) -> i64 {
     if content.starts_with("0x") || content.starts_with("0X") {
         i64::from_str_radix(&content[2..], 16).unwrap()
@@ -206,4 +213,3 @@ fn parse_string(s: &str) -> String {
 
     result
 }
-
